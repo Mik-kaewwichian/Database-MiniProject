@@ -34,48 +34,50 @@ const Navbar = () => {
             <Link to="/ebooks" className="text-gray-700 hover:text-primary-600 font-medium">
               หนังสือ
             </Link>
-
+            <Link to="/my-reviews" className="text-gray-700 hover:text-primary-600 font-medium">
+              รีวิวของฉัน
+            </Link>
             {user ? (
               <>
-                <Link to="/wishlist" className="text-gray-700 hover:text-primary-600">
-                  <Heart className="h-6 w-6" />
-                </Link>
-                <Link to="/cart" className="text-gray-700 hover:text-primary-600 relative">
-                  <ShoppingCart className="h-6 w-6" />
+                  <Link to="/wishlist" className="text-gray-700 hover:text-primary-600">
+                    <Heart className="h-6 w-6" />
+                  </Link>
+                  <Link to="/cart" className="text-gray-700 hover:text-primary-600 relative">
+                    <ShoppingCart className="h-6 w-6" />
                     {cartCount > 0 && (
                       <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {cartCount}
-                  </span>
+                        {cartCount}
+                      </span>
                     )}
-                </Link>
-                <div className="flex items-center space-x-3">
-                  <Link to="/profile" className="text-gray-700 hover:text-primary-600">
-                    <User className="h-6 w-6" />
                   </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="text-gray-700 hover:text-red-600"
+                  <div className="flex items-center space-x-3">
+                    <Link to="/profile" className="text-gray-700 hover:text-primary-600">
+                      <User className="h-6 w-6" />
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="text-gray-700 hover:text-red-600"
+                    >
+                      <LogOut className="h-6 w-6" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <Link
+                    to="/login"
+                    className="text-primary-600 hover:text-primary-700 font-medium"
                   >
-                    <LogOut className="h-6 w-6" />
-                  </button>
+                    เข้าสู่ระบบ
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+                  >
+                    สมัครสมาชิก
+                  </Link>
                 </div>
-              </>
-            ) : (
-              <div className="flex items-center space-x-3">
-                <Link
-                  to="/login"
-                  className="text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  เข้าสู่ระบบ
-                </Link>
-                <Link
-                  to="/register"
-                  className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-                >
-                  สมัครสมาชิก
-                </Link>
-              </div>
-            )}
+              )}
           </div>
         </div>
       </div>

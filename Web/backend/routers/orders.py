@@ -1,168 +1,125 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from database import get_db
-from models.order import OrderCreate, PaymentCreate
+from models.order import OrderCreate
 from utils.auth import get_current_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
-@router.post("")
-async def create_order(order_data: OrderCreate, current_user=Depends(get_current_user)):
-    """Create order from cart"""
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_order(
+    order_data: OrderCreate,
+    current_user=Depends(get_current_user)
+):
+    """Create new order from cart"""
     db = get_db()
     
-    # Get active cart
-    cart = db.table("carts").select("*, cart_items(*, ebooks(title, price, stock))").eq("user_id", current_user["id"]).eq("status", "active").execute()
+    print(f"=== DEBUG CREATE ORDER ===")
+    print(f"User ID: {current_user['id']}")
     
-    if not cart.data or not cart.data[0].get("cart_items"):
-        raise HTTPException(status_code=400, detail="Cart is empty")
+    # 1. Get user's cart
+    cart = db.table("carts").select("*").eq("user_id", current_user["id"]).execute()
+    print(f"Cart query result: {cart.data}")
     
-    cart = cart.data[0]
-    cart_items = cart["cart_items"]
+    if not cart.data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cart not found")
     
-    # Check stock for all items
-    for item in cart_items:
-        if item["ebooks"]["stock"] < item["quantity"]:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for {item['ebooks']['title']}")
+    cart_id = cart.data[0]["id"]
+    print(f"Cart ID: {cart_id}")
     
-    # Calculate total
-    total = sum(item["quantity"] * float(item["price"]) for item in cart_items)
+    # 2. Get cart items
+    cart_items = db.table("cart_items").select("*").eq("cart_id", cart_id).execute()
+    print(f"Cart items query result: {cart_items.data}")
     
-    # Create order
-    new_order = db.table("orders").insert({
+    if not cart_items.data or len(cart_items.data) == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty")
+    
+    # 3. Calculate total and prepare order items
+    total = 0
+    order_items_data = []
+    
+    for item in cart_items.data:
+        # Get ebook price
+        ebook = db.table("ebooks").select("price, title").eq("id", item["ebook_id"]).execute()
+        
+        if not ebook.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Ebook {item['ebook_id']} not found")
+        
+        price = ebook.data[0]["price"]
+        subtotal = price * item["quantity"]
+        total += subtotal
+        
+        order_items_data.append({
+            "ebook_id": item["ebook_id"],
+            "quantity": item["quantity"],
+            "price": price,
+            "subtotal": subtotal
+        })
+    
+    # 4. Create order
+    order = db.table("orders").insert({
         "user_id": current_user["id"],
         "total_amount": total,
         "status": "pending",
+        "payment_method": order_data.payment_method,
         "payment_slip_url": order_data.slip_url
     }).execute()
     
-    order_id = new_order.data[0]["id"]
+    order_id = order.data[0]["id"]
+    print(f"✅ Created Order ID: {order_id}")
     
-    # Create order items
-    for item in cart_items:
+    # 5. Create order items
+    for item_data in order_items_data:
         db.table("order_items").insert({
             "order_id": order_id,
-            "ebook_id": item["ebook_id"],
-            "quantity": item["quantity"],
-            "price": float(item["price"]),
-            "subtotal": float(item["quantity"] * item["price"])
+            **item_data
         }).execute()
     
-    # Create payment record
-    db.table("payments").insert({
-        "order_id": order_id,
-        "amount": total,
-        "payment_method": order_data.payment_method,
-        "slip_url": order_data.slip_url,
-        "status": "pending"
-    }).execute()
+    # 6. Clear cart
+    db.table("cart_items").delete().eq("cart_id", cart_id).execute()
+    print("✅ Cart cleared successfully")
     
-    # Update cart status
-    db.table("carts").update({"status": "converted"}).eq("id", cart["id"]).execute()
-    
-    # Clear cart items
-    db.table("cart_items").delete().eq("cart_id", cart["id"]).execute()
-    
-    return success_response({"order_id": order_id}, "Order created successfully")
+    return success_response(
+        data={"order_id": order_id},
+        message="Order created successfully"
+    )
+
 
 @router.get("")
 async def get_orders(current_user=Depends(get_current_user)):
-    """Get user's orders"""
+    """Get current user's orders"""
     db = get_db()
     
-    orders = db.table("orders").select("*, order_items(*, ebooks(title))").eq("user_id", current_user["id"]).order("created_at", desc=True).execute()
+    orders = db.table("orders").select("""
+        *,
+        order_items (
+            id,
+            quantity,
+            price,
+            subtotal,
+            ebooks (title)
+        )
+    """).eq("user_id", current_user["id"]).order("created_at", desc=True).execute()
     
-    return success_response(orders.data)
+    return success_response(data=orders.data)
+
 
 @router.get("/{order_id}")
-async def get_order(order_id: int, current_user=Depends(get_current_user)):
-    """Get order details"""
+async def get_order(
+    order_id: int,
+    current_user=Depends(get_current_user)
+):
+    """Get specific order details"""
     db = get_db()
     
-    order = db.table("orders").select("*, order_items(*, ebooks(title, download_url)), payments(*)").eq("id", order_id).execute()
-    
-    if not order.data:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    order = order.data[0]
-    
-    # Verify ownership
-    if order["user_id"] != current_user["id"] and current_user["roles"]["name"] != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    # Add download tokens if order is confirmed
-    if order["status"] == "confirmed":
-        for item in order["order_items"]:
-            download_link = db.table("download_links").select("token").eq("order_item_id", item["id"]).execute()
-            if download_link.data:
-                item["download_token"] = download_link.data[0]["token"]
-    
-    return success_response(order)
-
-@router.post("/{order_id}/payment")
-async def submit_payment(order_id: int, payment_data: PaymentCreate, current_user=Depends(get_current_user)):
-    """Submit payment for order"""
-    db = get_db()
-    
-    # Verify order belongs to user
-    order = db.table("orders").select("*").eq("id", order_id).eq("user_id", current_user["id"]).execute()
-    
-    if not order.data:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.data[0]["status"] != "pending":
-        raise HTTPException(status_code=400, detail="Order is not pending")
-    
-    # Update order
-    db.table("orders").update({
-        "status": "paid",
-        "payment_slip_url": payment_data.slip_url
-    }).eq("id", order_id).execute()
-    
-    # Update payment
-    db.table("payments").update({
-        "status": "pending",
-        "slip_url": payment_data.slip_url,
-        "paid_at": "now()"
-    }).eq("order_id", order_id).execute()
-    
-    return success_response(message="Payment submitted")
-
-@router.get("/{order_id}/download/{item_id}")
-async def download_ebook(order_id: int, item_id: int, current_user=Depends(get_current_user)):
-    """Get download link for order item"""
-    db = get_db()
-    
-    # Verify order belongs to user and is confirmed
-    order = db.table("orders").select("*").eq("id", order_id).eq("user_id", current_user["id"]).execute()
-    
-    if not order.data:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.data[0]["status"] != "confirmed":
-        raise HTTPException(status_code=403, detail="Order not confirmed yet")
-    
-    # Get order item
-    order_item = db.table("order_items").select("*, ebooks(download_url)").eq("id", item_id).eq("order_id", order_id).execute()
-    
-    if not order_item.data:
-        raise HTTPException(status_code=404, detail="Order item not found")
-    
-    # Get download link
-    download_link = db.table("download_links").select("*").eq("order_item_id", item_id).execute()
-    
-    if not download_link.data:
-        raise HTTPException(status_code=404, detail="Download link not found")
-    
-    link = download_link.data[0]
-    
-    # Check if expired
-    from datetime import datetime
-    if datetime.fromisoformat(link["expires_at"].replace("Z", "+00:00")) < datetime.now():
-        raise HTTPException(status_code=410, detail="Download link expired")
-    
-    return success_response({
-        "download_url": order_item.data[0]["ebooks"]["download_url"],
-        "token": link["token"],
-        "expires_at": link["expires_at"]
-    })
+    order = db.table("orders").select("""
+        *,
+        order_items (
+            id,
+            quantity,
+            price,
+            subtotal,
+            ebooks (title, cover_url)
+        )
+    """).eq("id", order_id).eq

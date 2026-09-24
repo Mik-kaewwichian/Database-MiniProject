@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';  // ✅ เพิ่ม useEffect
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { ordersAPI } from '../services/api';
@@ -12,12 +12,12 @@ const Checkout = () => {
   const [slipFile, setSlipFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ✅ ใช้ useEffect แทน
-useEffect(() => {
-  if (!cart || cart.items.length === 0) {
-    navigate('/cart');
-  }
-}, [cart, navigate]);
+  // ✅ ย้ายการเช็ค cart ว่างมาไว้ใน useEffect
+  useEffect(() => {
+    if (!cart || cart.items.length === 0) {
+      navigate('/cart');
+    }
+  }, [cart, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,7 +28,6 @@ useEffect(() => {
     console.log('Payment Method:', paymentMethod);
 
     try {
-      // Mock slip URL
       const mockSlipUrl = slipFile 
         ? `https://example.com/slips/${Date.now()}.jpg` 
         : 'https://example.com/slips/default.jpg';
@@ -45,23 +44,20 @@ useEffect(() => {
       console.log('Response from API:', response);
       console.log('Response data:', response.data);
 
-      // ✅ เช็คโครงสร้าง response
       let orderId;
       if (response.data?.data?.order_id) {
         orderId = response.data.data.order_id;
       } else if (response.data?.data?.id) {
         orderId = response.data.data.id;
       } else {
-        orderId = Date.now(); // Fallback
+        orderId = Date.now();
       }
 
       console.log('Order ID:', orderId);
-      console.log('Order Response:', response.data); // <-- เพิ่มบรรทัดนี้เพื่อ debug
 
       clearCart();
       toast.success('สร้างคำสั่งซื้อสำเร็จ!');
       
-      // ✅ Navigate พร้อม delay เล็กน้อย
       setTimeout(() => {
         navigate('/order-success', { state: { orderId } });
       }, 500);
@@ -70,13 +66,17 @@ useEffect(() => {
       console.error('=== CHECKOUT ERROR ===');
       console.error('Error:', error);
       console.error('Error Response:', error.response?.data);
-      console.error('Error Status:', error.response?.status);
-      console.error('Order Error:', error); // <-- เพิ่มบรรทัดนี้
+      
       toast.error(error.response?.data?.detail || 'สร้างคำสั่งซื้อไม่สำเร็จ');
     } finally {
       setLoading(false);
     }
   };
+
+  // ✅ ถ้า cart ว่าง ให้ return null (หลังจาก useEffect ทำงานแล้ว)
+  if (!cart || cart.items.length === 0) {
+    return null;
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
