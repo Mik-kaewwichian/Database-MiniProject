@@ -1,0 +1,39 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from config import settings
+from routers import auth, ebooks, cart, orders, reviews, wishlist, admin
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    debug=settings.DEBUG
+)
+
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(auth.router)
+app.include_router(ebooks.router)
+app.include_router(cart.router)
+app.include_router(orders.router)
+app.include_router(reviews.router)
+app.include_router(wishlist.router)
+app.include_router(admin.router)
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to E-Book Mart API"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

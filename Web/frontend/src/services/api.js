@@ -1,0 +1,66 @@
+import axios from 'axios';
+
+const API_URL = 'http://localhost:8000';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// E-Books API
+export const ebooksAPI = {
+  getAll: (params = {}) => api.get('/api/ebooks', { params }),
+  getById: (id) => api.get(`/api/ebooks/${id}`),
+  getCategories: () => api.get('/api/ebooks/categories'),
+};
+
+// Cart API
+export const cartAPI = {
+  get: () => api.get('/api/cart'),
+  addItem: (data) => api.post('/api/cart/items', data),
+  updateItem: (id, data) => api.put(`/api/cart/items/${id}`, data),
+  removeItem: (id) => api.delete(`/api/cart/items/${id}`),
+};
+
+// Orders API
+export const ordersAPI = {
+  create: (data) => api.post('/api/orders', data),
+  getAll: () => api.get('/api/orders'),
+  getById: (id) => api.get(`/api/orders/${id}`),
+};
+
+// Wishlist API
+export const wishlistAPI = {
+  get: () => api.get('/api/wishlist'),
+  add: (ebookId) => api.post(`/api/wishlist/${ebookId}`),
+  remove: (ebookId) => api.delete(`/api/wishlist/${ebookId}`),
+};
+
+// Reviews API
+export const reviewsAPI = {
+  getByEbook: (ebookId) => api.get(`/api/reviews/ebook/${ebookId}`),
+  create: (ebookId, data) => api.post(`/api/reviews/ebook/${ebookId}`, data),
+};
+
+export default api;
