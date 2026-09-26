@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ebooksAPI, cartAPI, reviewsAPI } from '../services/api';
+import { ebooksAPI, cartAPI, reviewsAPI, wishlistAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingCart, Star, BookOpen, User, Calendar } from 'lucide-react';
+import { getCoverImageUrl, handleCoverImageError } from '../components/book/coverImage';
+import { ShoppingCart, Heart, Star, BookOpen, User, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const EbookDetail = () => {
@@ -12,12 +13,46 @@ const EbookDetail = () => {
   const [book, setBook] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoaded, setWishlistLoaded] = useState(false);
+  const [wishlistSaving, setWishlistSaving] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
 
   useEffect(() => {
     loadBook();
     loadReviews();
   }, [id]);
+
+  useEffect(() => {
+    if (!user) {
+      setIsWishlisted(false);
+      setWishlistLoaded(true);
+      return;
+    }
+
+    let isCurrent = true;
+    setWishlistLoaded(false);
+
+    wishlistAPI.get()
+      .then((response) => {
+        const items = response.data.data || [];
+        if (isCurrent) {
+          setIsWishlisted(items.some((item) =>
+            String(item.ebook_id ?? item.ebooks?.id) === String(id)
+          ));
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load wishlist status:', error);
+      })
+      .finally(() => {
+        if (isCurrent) setWishlistLoaded(true);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [id, user]);
 
   const loadBook = async () => {
     try {
@@ -53,6 +88,36 @@ const EbookDetail = () => {
       toast.success('เพิ่มลงตะกร้าแล้ว!');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'เพิ่มลงตะกร้าไม่สำเร็จ');
+    }
+  };
+
+  const handleToggleWishlist = async () => {
+    if (!user) {
+      toast.error('กรุณาเข้าสู่ระบบก่อนเพิ่มลง wishlist');
+      navigate('/login');
+      return;
+    }
+
+    setWishlistSaving(true);
+    try {
+      if (isWishlisted) {
+        await wishlistAPI.remove(book.id);
+        setIsWishlisted(false);
+        toast.success('ลบออกจาก wishlist แล้ว');
+      } else {
+        await wishlistAPI.add(book.id);
+        setIsWishlisted(true);
+        toast.success('เพิ่มลง wishlist แล้ว');
+      }
+    } catch (error) {
+      if (error.response?.data?.detail === 'Already in wishlist') {
+        setIsWishlisted(true);
+        toast.success('หนังสืออยู่ใน wishlist แล้ว');
+      } else {
+        toast.error(error.response?.data?.detail || 'บันทึก wishlist ไม่สำเร็จ');
+      }
+    } finally {
+      setWishlistSaving(false);
     }
   };
 
@@ -96,11 +161,12 @@ const EbookDetail = () => {
       {/* Book Detail */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         {/* Cover Image */}
-        <div className="relative">
+        <div className="relative w-full max-w-sm mx-auto bg-gray-200">
           <img
-            src={book.cover_url || 'https://via.placeholder.com/400x600?text=No+Cover'}
+            src={getCoverImageUrl(book.cover_url)}
             alt={book.title}
-            className="w-full rounded-lg shadow-lg"
+            className="w-full h-auto rounded-lg shadow-lg"
+            onError={handleCoverImageError}
           />
         </div>
 
@@ -159,6 +225,19 @@ const EbookDetail = () => {
           >
             <ShoppingCart className="h-5 w-5" />
             <span>{book.stock === 0 ? 'หมดสต็อก' : 'เพิ่มลงตะกร้า'}</span>
+          </button>
+
+          <button
+            onClick={handleToggleWishlist}
+            disabled={wishlistSaving || (user && !wishlistLoaded)}
+            className={`w-full mt-3 flex items-center justify-center space-x-2 border py-3 px-6 rounded-lg transition-colors text-lg font-medium disabled:cursor-not-allowed ${
+              isWishlisted
+                ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-current' : ''}`} />
+            <span>{isWishlisted ? 'อยู่ใน Wishlist' : 'เพิ่มใน Wishlist'}</span>
           </button>
         </div>
       </div>

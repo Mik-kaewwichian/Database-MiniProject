@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ShoppingCart, Star } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext'; // ✅ เพิ่มบรรทัดนี้
+import { getCoverImageUrl, handleCoverImageError } from './coverImage';
 import toast from 'react-hot-toast';
 
 const BookCard = ({ book }) => {
@@ -27,12 +28,10 @@ const BookCard = ({ book }) => {
         {/* Cover Image */}
         <div className="relative h-64 bg-gray-200 overflow-hidden">
           <img
-            src={book.cover_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=300&h=400&fit=crop'}
+            src={getCoverImageUrl(book.cover_url)}
             alt={book.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={(e) => {
-              e.target.src = 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=300&h=400&fit=crop';
-            }}
+            onError={handleCoverImageError}
           />
           {book.stock === 0 && (
             <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
