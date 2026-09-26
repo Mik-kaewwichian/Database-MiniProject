@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from config import settings
 from database import get_db
 from models.ebook import EbookCreate, EbookUpdate
 from models.order import OrderUpdate
@@ -7,9 +9,57 @@ from utils.response import success_response
 from decimal import Decimal
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
+logger = logging.getLogger(__name__)
 
 
 # ==================== E-BOOK MANAGEMENT ====================
+
+@router.post("/upload-cover")
+async def upload_ebook_cover(file: UploadFile = File(...), admin=Depends(get_current_admin)):
+    """Upload a PNG or JPEG ebook cover to public Supabase Storage."""
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 5 MB or smaller")
+
+    image_types = {
+        b"\x89PNG\r\n\x1a\n": ("image/png", "png"),
+        b"\xff\xd8\xff": ("image/jpeg", "jpg"),
+    }
+    image_type = next(
+        (details for signature, details in image_types.items() if content.startswith(signature)),
+        None,
+    )
+    if image_type is None:
+        raise HTTPException(status_code=400, detail="Only PNG and JPEG images are allowed")
+
+    import secrets
+    from supabase import create_client
+
+    content_type, extension = image_type
+    file_path = f"{secrets.token_hex(16)}.{extension}"
+    if not settings.SUPABASE_SERVICE_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="ยังไม่ได้ตั้งค่า SUPABASE_SERVICE_KEY ใน Web/backend/.env กรุณาตั้งค่าแล้วรีสตาร์ต backend",
+        )
+
+    try:
+        storage = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY).storage.from_("ebook-covers")
+        storage.upload(
+            file_path,
+            content,
+            file_options={"content-type": content_type, "upsert": "false"},
+        )
+        cover_url = storage.get_public_url(file_path)
+    except Exception as error:
+        logger.exception("Supabase ebook cover upload failed")
+        error_message = str(getattr(error, "message", error))[:240]
+        raise HTTPException(
+            status_code=500,
+            detail=f"อัปโหลดไม่สำเร็จ: {error_message}",
+        ) from error
+
+    return success_response({"cover_url": cover_url}, "Cover uploaded")
 
 @router.get("/ebooks")
 async def get_all_ebooks(admin=Depends(get_current_admin)):

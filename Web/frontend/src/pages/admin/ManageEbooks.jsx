@@ -12,6 +12,8 @@ const ManageEbooks = () => {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editEbook, setEditEbook] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     title: '', author_id: '', category_id: '', price: '', stock: '',
     description: '', cover_url: '', download_url: '', is_active: true,
@@ -49,6 +51,7 @@ const ManageEbooks = () => {
 
   const handleEdit = (ebook) => {
     setEditEbook(ebook);
+    setCoverFile(null);
     setFormData({
       title: ebook.title || '',
       author_id: ebook.author_id || ebook.authors?.id || '',
@@ -65,6 +68,7 @@ const ManageEbooks = () => {
 
   const handleAdd = () => {
     setEditEbook(null);
+    setCoverFile(null);
     setFormData({ title: '', author_id: '', category_id: '', price: '', stock: '', description: '', cover_url: '', download_url: '', is_active: true });
     setShowModal(true);
   };
@@ -79,7 +83,17 @@ const ManageEbooks = () => {
       stock: parseInt(formData.stock),
     };
 
+    setSaving(true);
     try {
+      if (coverFile) {
+        const uploadData = new FormData();
+        uploadData.append('file', coverFile);
+        const uploadResponse = await api.post('/api/admin/upload-cover', uploadData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        payload.cover_url = uploadResponse.data.data.cover_url;
+      }
+
       if (editEbook) {
         await api.put(`/api/admin/ebooks/${editEbook.id}`, payload);
         toast.success('อัปเดตหนังสือสำเร็จ');
@@ -91,6 +105,8 @@ const ManageEbooks = () => {
       loadData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'บันทึกไม่สำเร็จ');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -202,7 +218,10 @@ const ManageEbooks = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">URL รูปปก</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">อัปโหลดรูปปก (PNG หรือ JPEG, ไม่เกิน 5 MB)</label>
+                  <input type="file" accept="image/png,image/jpeg" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  {coverFile && <p className="mt-1 text-sm text-gray-600">เลือกไฟล์: {coverFile.name}</p>}
+                  <label className="block text-sm font-medium text-gray-700 mt-3 mb-2">หรือระบุ URL รูปปก</label>
                   <input type="url" name="cover_url" value={formData.cover_url} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
@@ -218,7 +237,7 @@ const ManageEbooks = () => {
                   <label htmlFor="is_active" className="text-sm font-medium text-gray-700">{formData.is_active ? 'เปิดใช้งาน (แสดงในหน้าร้าน)' : 'ปิดใช้งาน (ซ่อนจากหน้าร้าน)'}</label>
                 </div>
                 <div className="flex space-x-3 pt-4">
-                  <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">{editEbook ? '💾 อัปเดต' : '➕ สร้างหนังสือ'}</button>
+                  <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? 'กำลังบันทึก...' : editEbook ? '💾 อัปเดต' : '➕ สร้างหนังสือ'}</button>
                   <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300">ยกเลิก</button>
                 </div>
               </form>

@@ -1,9 +1,11 @@
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Supabase Configuration
     SUPABASE_URL: str
     SUPABASE_KEY: str
+    SUPABASE_SERVICE_KEY: Optional[str] = None
     
     # JWT Configuration
     SECRET_KEY: str = "your-secret-key-change-in-production"
