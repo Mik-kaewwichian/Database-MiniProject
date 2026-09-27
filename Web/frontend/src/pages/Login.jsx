@@ -105,12 +105,13 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Demo Account */}
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-600 font-medium mb-2">บัญชีทดสอบ:</p>
-            <p className="text-xs text-gray-500">อีเมล: customer1@email.com</p>
-            <p className="text-xs text-gray-500">รหัสผ่าน: password123</p>
-          </div>
+          {import.meta.env.DEV && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-600 font-medium mb-2">บัญชีทดสอบ:</p>
+              <p className="text-xs text-gray-500">อีเมล: customer1@email.com</p>
+              <p className="text-xs text-gray-500">รหัสผ่าน: password123</p>
+            </div>
+          )}
         </form>
       </div>
     </div>
