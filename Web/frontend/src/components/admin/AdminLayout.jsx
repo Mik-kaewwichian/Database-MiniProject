@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
-  LayoutDashboard, BookOpen, ShoppingCart, Users, BarChart3, LogOut, Menu, X
+  LayoutDashboard, BookOpen, ShoppingCart, Users, BarChart3, LogOut, Menu, X, Feather
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -20,6 +20,7 @@ const AdminLayout = ({ children }) => {
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/ebooks', icon: BookOpen, label: 'จัดการหนังสือ' },
     { path: '/admin/categories', icon: BookOpen, label: 'จัดการหมวดหมู่' }, // จะสร้างในขั้นตอนถัดไป
+    { path: '/admin/authors', icon: Feather, label: 'จัดการผู้แต่ง' },
     { path: '/admin/orders', icon: ShoppingCart, label: 'จัดการคำสั่งซื้อ' },
     { path: '/admin/users', icon: Users, label: 'จัดการผู้ใช้' },
     { path: '/admin/reports', icon: BarChart3, label: 'รายงาน' },

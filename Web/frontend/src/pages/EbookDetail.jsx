@@ -17,6 +17,9 @@ const EbookDetail = () => {
   const [wishlistLoaded, setWishlistLoaded] = useState(false);
   const [wishlistSaving, setWishlistSaving] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
+  const averageRating = reviews.length
+    ? reviews.reduce((total, review) => total + (Number(review.rating) || 0), 0) / reviews.length
+    : null;
 
   useEffect(() => {
     loadBook();
@@ -179,11 +182,14 @@ const EbookDetail = () => {
             {book.title}
           </h1>
 
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="flex items-center space-x-1">
-              <Star className="h-5 w-5 text-yellow-400 fill-current" />
-              <span className="text-lg font-medium">4.5</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-6">
+            <div className="flex items-center space-x-1" aria-label={averageRating === null ? 'ยังไม่มีคะแนนรีวิว' : `คะแนนเฉลี่ย ${averageRating.toFixed(1)} จาก 5`}>
+                <Star className="h-5 w-5 text-yellow-400 fill-current" />
+              <span className="text-lg font-medium">{averageRating === null ? '—' : averageRating.toFixed(1)}</span>
             </div>
+            <span className="text-sm text-gray-500">
+              {reviews.length > 0 ? `${reviews.length} รีวิว` : 'ยังไม่มีคะแนน'}
+            </span>
             <span className="text-gray-400">|</span>
             <span className="text-gray-600">โดย {book.authors?.name}</span>
           </div>

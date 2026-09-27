@@ -50,6 +50,8 @@ export const ordersAPI = {
   create: (data) => api.post('/api/orders', data),
   getAll: () => api.get('/api/orders'),
   getById: (id) => api.get(`/api/orders/${id}`),
+  cancel: (id) => api.post(`/api/orders/${id}/cancel`),
+  getDownloadUrl: (path) => `${API_URL}${path}`,
 };
 
 // Wishlist API

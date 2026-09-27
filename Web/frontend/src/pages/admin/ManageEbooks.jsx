@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from "../../components/admin/AdminLayout";
 import api from '../../services/api';
-import { Plus, Edit, Trash2, Search, X, Upload, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, X, Upload, Save, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCoverImageUrl, handleCoverImageError } from '../../components/book/coverImage';
 
@@ -11,6 +11,8 @@ const ManageEbooks = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [updatingEbookId, setUpdatingEbookId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editEbook, setEditEbook] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
@@ -39,14 +41,34 @@ const ManageEbooks = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('คุณแน่ใจหรือว่าต้องการปิดการใช้งานหนังสือเล่มนี้?')) return;
+  const handleDelete = async (ebook) => {
+    if (!confirm(`นำ "${ebook.title}" ออกจากรายการหนังสือที่เปิดขายหรือไม่?`)) return;
+    setUpdatingEbookId(ebook.id);
     try {
-      await api.delete(`/api/admin/ebooks/${id}`);
-      toast.success('ดำเนินการสำเร็จ');
-      loadData();
+      await api.delete(`/api/admin/ebooks/${ebook.id}`);
+      setEbooks((currentEbooks) => currentEbooks.map((currentEbook) =>
+        currentEbook.id === ebook.id ? { ...currentEbook, is_active: false } : currentEbook
+      ));
+      toast.success('นำหนังสือออกจากรายการที่เปิดขายแล้ว');
     } catch (error) {
-      toast.error('ดำเนินการไม่สำเร็จ');
+      toast.error(error.response?.data?.detail || 'นำหนังสือออกไม่สำเร็จ');
+    } finally {
+      setUpdatingEbookId(null);
+    }
+  };
+
+  const handleRestore = async (ebook) => {
+    setUpdatingEbookId(ebook.id);
+    try {
+      await api.put(`/api/admin/ebooks/${ebook.id}`, { is_active: true });
+      setEbooks((currentEbooks) => currentEbooks.map((currentEbook) =>
+        currentEbook.id === ebook.id ? { ...currentEbook, is_active: true } : currentEbook
+      ));
+      toast.success('เปิดขายหนังสืออีกครั้งแล้ว');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'กู้คืนหนังสือไม่สำเร็จ');
+    } finally {
+      setUpdatingEbookId(null);
     }
   };
 
@@ -133,10 +155,12 @@ const ManageEbooks = () => {
   };
 
   const filteredEbooks = ebooks.filter((ebook) =>
-    ebook.title?.toLowerCase().includes(search.toLowerCase()) ||
-    ebook.authors?.name?.toLowerCase().includes(search.toLowerCase())
+    (statusFilter === 'all' || (statusFilter === 'active' ? ebook.is_active !== false : ebook.is_active === false)) &&
+    (ebook.title?.toLowerCase().includes(search.toLowerCase()) ||
+    ebook.authors?.name?.toLowerCase().includes(search.toLowerCase()))
   );
   const activeEbookCount = ebooks.filter((ebook) => ebook.is_active !== false).length;
+  const inactiveEbookCount = ebooks.length - activeEbookCount;
 
   if (loading) return <AdminLayout><div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div></AdminLayout>;
 
@@ -159,6 +183,24 @@ const ManageEbooks = () => {
         <div className="relative max-w-xl">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาชื่อหนังสือหรือผู้แต่ง" aria-label="ค้นหาหนังสือ" className="min-h-12 w-full rounded-lg border border-slate-300 bg-white pl-11 pr-4 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+        </div>
+
+        <div className="flex flex-wrap gap-2" role="group" aria-label="กรองหนังสือตามสถานะ">
+          {[
+            { value: 'active', label: `กำลังขาย ${activeEbookCount}` },
+            { value: 'inactive', label: `ปิดขาย ${inactiveEbookCount}` },
+            { value: 'all', label: `ทั้งหมด ${ebooks.length}` },
+          ].map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              aria-pressed={statusFilter === filter.value}
+              onClick={() => setStatusFilter(filter.value)}
+              className={`min-h-10 rounded-lg border px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${statusFilter === filter.value ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
 
         <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:block">
@@ -197,7 +239,11 @@ const ManageEbooks = () => {
                     <td className="px-4 py-3.5 text-right text-sm">
                       <div className="flex justify-end gap-1">
                         <button onClick={() => handleEdit(ebook)} aria-label={`แก้ไข ${ebook.title}`} title="แก้ไขหนังสือ" className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"><Edit className="h-4 w-4" /></button>
-                        <button onClick={() => handleDelete(ebook.id)} aria-label={`ปิดใช้งาน ${ebook.title}`} title="ปิดใช้งานหนังสือ" className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"><Trash2 className="h-4 w-4" /></button>
+                        {ebook.is_active !== false ? (
+                          <button onClick={() => handleDelete(ebook)} disabled={updatingEbookId === ebook.id} aria-label={`นำ ${ebook.title} ออกจากรายการขาย`} title="นำออกจากรายการขาย" className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
+                        ) : (
+                          <button onClick={() => handleRestore(ebook)} disabled={updatingEbookId === ebook.id} aria-label={`เปิดขาย ${ebook.title} อีกครั้ง`} title="เปิดขายอีกครั้ง" className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50"><RotateCcw className="h-4 w-4" /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -228,7 +274,11 @@ const ManageEbooks = () => {
                 </div>
                 <div className="mt-2 flex justify-end gap-1 border-t border-slate-100 pt-2">
                   <button onClick={() => handleEdit(ebook)} aria-label={`แก้ไข ${ebook.title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700"><Edit className="h-4 w-4" /></button>
-                  <button onClick={() => handleDelete(ebook.id)} aria-label={`ปิดใช้งาน ${ebook.title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
+                  {ebook.is_active !== false ? (
+                    <button onClick={() => handleDelete(ebook)} disabled={updatingEbookId === ebook.id} aria-label={`นำ ${ebook.title} ออกจากรายการขาย`} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
+                  ) : (
+                    <button onClick={() => handleRestore(ebook)} disabled={updatingEbookId === ebook.id} aria-label={`เปิดขาย ${ebook.title} อีกครั้ง`} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" /></button>
+                  )}
                 </div>
               </div>
             </article>

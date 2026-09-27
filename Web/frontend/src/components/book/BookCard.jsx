@@ -5,9 +5,22 @@ import { useCart } from '../../context/CartContext'; // ✅ เพิ่มบ�
 import { getCoverImageUrl, handleCoverImageError } from './coverImage';
 import toast from 'react-hot-toast';
 
-const BookCard = ({ book }) => {
+const truncateTitle = (title, maxLength) => {
+  if (!maxLength || !title) return title;
+
+  const characters = typeof Intl.Segmenter === 'function'
+    ? Array.from(new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(title), ({ segment }) => segment)
+    : Array.from(title);
+
+  return characters.length > maxLength
+    ? `${characters.slice(0, maxLength - 1).join('')}…`
+    : title;
+};
+
+const BookCard = ({ book, titleMaxLength }) => {
   const { user } = useAuth();
   const { addItem } = useCart(); // ✅ ใช้ addItem จาก CartContext
+  const hasReviews = Number(book.review_count) > 0 && Number.isFinite(Number(book.average_rating));
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
@@ -48,8 +61,8 @@ const BookCard = ({ book }) => {
           </span>
 
           {/* Title */}
-          <h3 className="text-lg font-semibold text-gray-900 mt-1 line-clamp-2 group-hover:text-primary-600">
-            {book.title}
+          <h3 aria-label={book.title} className="text-lg font-semibold text-gray-900 mt-1 line-clamp-2 group-hover:text-primary-600">
+            {truncateTitle(book.title, titleMaxLength)}
           </h3>
 
           {/* Author */}
@@ -59,10 +72,13 @@ const BookCard = ({ book }) => {
 
           {/* Rating & Price */}
           <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center space-x-1">
+            <div className="flex min-w-0 items-center space-x-1" aria-label={hasReviews ? `คะแนน ${Number(book.average_rating).toFixed(1)} จาก 5 จาก ${book.review_count} รีวิว` : 'ยังไม่มีรีวิว'}>
               <Star className="h-4 w-4 text-yellow-400 fill-current" />
               <span className="text-sm font-medium text-gray-700">
-                {book.average_rating || '0.0'}
+                {hasReviews ? Number(book.average_rating).toFixed(1) : '—'}
+              </span>
+              <span className="truncate text-xs text-gray-500">
+                {hasReviews ? `(${book.review_count})` : 'ไม่มีรีวิว'}
               </span>
             </div>
             <span className="text-xl font-bold text-primary-600">

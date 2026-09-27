@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { cartAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -15,12 +15,16 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
+  const cartRequestId = useRef(0);
 
   const loadCart = useCallback(async () => {
+    const requestId = ++cartRequestId.current;
     const token = localStorage.getItem('token');
     if (!token) {
-      setCart({ items: [], total: 0 });
-      setLoading(false);
+      if (requestId === cartRequestId.current) {
+        setCart({ items: [], total: 0 });
+        setLoading(false);
+      }
       return;
     }
 
@@ -32,14 +36,14 @@ export const CartProvider = ({ children }) => {
       console.log('📦 Cart response:', response.data);
       
       const cartData = response.data.data || { items: [], total: 0 };
-      setCart(cartData);
+      if (requestId === cartRequestId.current) setCart(cartData);
       
       console.log('✅ Cart loaded:', cartData);
     } catch (error) {
       console.error('❌ Failed to load cart:', error);
-      setCart({ items: [], total: 0 });
+      if (requestId === cartRequestId.current) setCart({ items: [], total: 0 });
     } finally {
-      setLoading(false);
+      if (requestId === cartRequestId.current) setLoading(false);
     }
   }, []);
 
@@ -107,7 +111,9 @@ export const CartProvider = ({ children }) => {
   };
 
   const clearCart = () => {
+    cartRequestId.current += 1;
     setCart({ items: [], total: 0 });
+    setLoading(false);
   };
 
   const cartCount = cart?.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;

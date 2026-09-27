@@ -28,6 +28,7 @@ import MyReviews from './pages/MyReviews';
 import Dashboard from './pages/admin/Dashboard';
 import ManageEbooks from './pages/admin/ManageEbooks';
 import ManageCategories from './pages/admin/ManageCategories'; // สร้างไว้ล่วงหน้า
+import ManageAuthors from './pages/admin/ManageAuthors';
 import ManageOrders from './pages/admin/ManageOrders';
 import ManageUsers from './pages/admin/ManageUsers';
 import Reports from './pages/admin/Reports';
@@ -48,6 +49,7 @@ function App() {
             <Route path="/admin" element={<ProtectedRoute adminOnly={true}><Dashboard /></ProtectedRoute>} />
             <Route path="/admin/ebooks" element={<ProtectedRoute adminOnly={true}><ManageEbooks /></ProtectedRoute>} />
             <Route path="/admin/categories" element={<ProtectedRoute adminOnly={true}><ManageCategories /></ProtectedRoute>} />
+            <Route path="/admin/authors" element={<ProtectedRoute adminOnly={true}><ManageAuthors /></ProtectedRoute>} />
             <Route path="/admin/orders" element={<ProtectedRoute adminOnly={true}><ManageOrders /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute adminOnly={true}><ManageUsers /></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute adminOnly={true}><Reports /></ProtectedRoute>} />

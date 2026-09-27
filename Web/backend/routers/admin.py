@@ -185,8 +185,19 @@ async def update_order_status(order_id: int, order_data: OrderUpdate, admin=Depe
         from datetime import datetime, timedelta
         
         order_items = db.table("order_items").select("id, ebook_id, ebooks(download_url)").eq("order_id", order_id).execute()
+        order_item_ids = [item["id"] for item in order_items.data]
+        existing_links = []
+        if order_item_ids:
+            existing_links = db.table("download_links").select("order_item_id").in_(
+                "order_item_id", order_item_ids
+            ).execute().data
+        linked_item_ids = {link["order_item_id"] for link in existing_links}
         
         for item in order_items.data:
+            if not (item.get("ebooks") or {}).get("download_url"):
+                continue
+            if item["id"] in linked_item_ids:
+                continue
             token = f"token_{secrets.token_urlsafe(32)}"
             expires_at = (datetime.now() + timedelta(days=7)).isoformat()
             

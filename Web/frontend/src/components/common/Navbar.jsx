@@ -30,7 +30,7 @@ const Navbar = () => {
           </div>
 
           {/* Navigation */}
-          <div className="hidden items-center gap-5 md:flex">
+          <div className="hidden items-center gap-5 lg:flex">
             <Link to="/" className="text-gray-700 hover:text-primary-600 font-medium">
               หน้าแรก
             </Link>
@@ -42,6 +42,9 @@ const Navbar = () => {
             </Link>
             {user ? (
               <>
+                  <Link to="/orders" className="text-gray-700 hover:text-primary-600 font-medium">
+                    คำสั่งซื้อ
+                  </Link>
                   <Link to="/wishlist" aria-label="Wishlist" title="Wishlist" className="text-gray-700 hover:text-primary-600">
                     <Heart className="h-6 w-6" />
                   </Link>
@@ -87,19 +90,20 @@ const Navbar = () => {
             aria-label={mobileOpen ? 'ปิดเมนู' : 'เปิดเมนู'}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 md:hidden"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 lg:hidden"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
         {mobileOpen && (
-          <nav aria-label="เมนูหลัก" className="border-t border-gray-200 py-2 md:hidden">
+          <nav aria-label="เมนูหลัก" className="border-t border-gray-200 py-2 lg:hidden">
             <div className="flex flex-col">
               <Link to="/" onClick={() => setMobileOpen(false)} className="rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">หน้าแรก</Link>
               <Link to="/ebooks" onClick={() => setMobileOpen(false)} className="rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">หนังสือ</Link>
               <Link to="/my-reviews" onClick={() => setMobileOpen(false)} className="rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">รีวิวของฉัน</Link>
               {user ? (
                 <>
+                  <Link to="/orders" onClick={() => setMobileOpen(false)} className="rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">คำสั่งซื้อ</Link>
                   <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">รายการที่ชอบ</Link>
                   <Link to="/cart" onClick={() => setMobileOpen(false)} className="flex items-center justify-between rounded-md px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
                     <span>ตะกร้าสินค้า</span><span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-700">{cartCount}</span>

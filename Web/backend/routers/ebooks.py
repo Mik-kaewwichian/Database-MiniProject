@@ -36,7 +36,7 @@ async def get_ebooks(
     """Get all active ebooks with filters"""
     db = get_db()
     
-    query = db.table("ebooks").select("*, categories(name), authors(name)").eq("is_active", True)
+    query = db.table("ebooks").select("*, categories(name), authors(name), reviews(rating)").eq("is_active", True)
     
     if category_id:
         query = query.eq("category_id", category_id)
@@ -50,5 +50,11 @@ async def get_ebooks(
     offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1).order("created_at", desc=True)
     ebooks = query.execute()
-    
+
+    for ebook in ebooks.data or []:
+        reviews = ebook.pop("reviews", []) or []
+        ratings = [float(review["rating"]) for review in reviews if review.get("rating") is not None]
+        ebook["review_count"] = len(ratings)
+        ebook["average_rating"] = round(sum(ratings) / len(ratings), 1) if ratings else None
+
     return success_response(ebooks.data)
