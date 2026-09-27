@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Mail, Lock, User, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
+import { BookOpen, Mail, Lock, User, Phone, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -11,7 +11,6 @@ const Register = () => {
     password: '',
     confirmPassword: '',
     phone: '',
-    address: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,7 +42,6 @@ const Register = () => {
         email: formData.email,
         password: formData.password,
         phone: formData.phone,
-        address: formData.address,
       });
       toast.success('สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ');
       navigate('/login');
@@ -182,24 +180,6 @@ const Register = () => {
               </div>
             </div>
 
-            {/* Address */}
-            <div>
-              <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                ที่อยู่
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                <textarea
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows="3"
-                  className="appearance-none rounded-lg relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="123 ถนนตัวอย่าง แขวง/เขต จังหวัด"
-                />
-              </div>
-            </div>
           </div>
 
           <div>
