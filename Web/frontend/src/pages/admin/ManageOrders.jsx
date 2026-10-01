@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import api from '../../services/api';
-import { Eye, X } from 'lucide-react';
+import { Eye, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ManageOrders = () => {
@@ -10,6 +10,7 @@ const ManageOrders = () => {
   const [loading, setLoading] = useState(true);
   const [reviewOrder, setReviewOrder] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [deletingOrderId, setDeletingOrderId] = useState(null);
   const [slipImageLoaded, setSlipImageLoaded] = useState(false);
   const [slipImageError, setSlipImageError] = useState(false);
   const requiresSlip = reviewOrder?.payment_method === 'โอนเงิน';
@@ -45,6 +46,24 @@ const ManageOrders = () => {
       window.dispatchEvent(new Event('admin-orders-updated'));
     } catch {
       toast.error('อัปเดตไม่สำเร็จ');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    const confirmed = window.confirm(`ลบคำสั่งซื้อ #${orderId} ถาวรหรือไม่? รายการสินค้าและข้อมูลชำระเงินที่เกี่ยวข้องจะถูกลบด้วย`);
+    if (!confirmed) return;
+
+    setDeletingOrderId(orderId);
+    try {
+      await api.delete(`/api/admin/orders/${orderId}`);
+      if (reviewOrder?.id === orderId) setReviewOrder(null);
+      toast.success('ลบคำสั่งซื้อแล้ว');
+      await loadOrders();
+      window.dispatchEvent(new Event('admin-orders-updated'));
+    } catch {
+      toast.error('ลบคำสั่งซื้อไม่สำเร็จ');
+    } finally {
+      setDeletingOrderId(null);
     }
   };
 
@@ -121,8 +140,9 @@ const ManageOrders = () => {
                   </td>
                   <td className="py-3 px-4 text-sm">{getStatusBadge(order.status)}</td>
                   <td className="py-3 px-4 text-sm">
-                    {['pending', 'paid'].includes(order.status) && (
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      {['pending', 'paid'].includes(order.status) && (
+                        <>
                         <button
                           type="button"
                           onClick={() => openSlipReview(order)}
@@ -137,8 +157,19 @@ const ManageOrders = () => {
                         >
                           ยกเลิก
                         </button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOrder(order.id)}
+                        disabled={deletingOrderId === order.id}
+                        aria-label={`ลบคำสั่งซื้อ ${order.id}`}
+                        title="ลบคำสั่งซื้อ"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

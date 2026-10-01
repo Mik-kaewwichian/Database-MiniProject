@@ -266,6 +266,41 @@ async def update_order_status(order_id: int, order_data: OrderUpdate, admin=Depe
     return success_response(updated.data[0], "Order updated")
 
 
+@router.delete("/orders/{order_id}")
+async def delete_order(order_id: int, admin=Depends(get_current_admin)):
+    """Delete an order and its related records (admin only)."""
+    db = get_db()
+    existing = db.table("orders").select(
+        "id, payment_slip_url, payments(slip_url)"
+    ).eq("id", order_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    db.table("orders").delete().eq("id", order_id).execute()
+
+    order = existing.data[0]
+    payments = order.get("payments") or []
+    payment_records = payments if isinstance(payments, list) else [payments]
+    slip_paths = {
+        slip_url
+        for slip_url in [order.get("payment_slip_url"), *(payment.get("slip_url") for payment in payment_records)]
+        if slip_url and not slip_url.startswith(("http://", "https://"))
+    }
+    if slip_paths and settings.SUPABASE_SERVICE_KEY:
+        try:
+            from supabase import create_client
+
+            storage = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_SERVICE_KEY,
+            ).storage.from_(PAYMENT_SLIP_BUCKET)
+            storage.remove(list(slip_paths))
+        except Exception:
+            logger.exception("Could not remove payment slips for deleted order %s", order_id)
+
+    return success_response(message="Order deleted")
+
+
 # ==================== USER MANAGEMENT ====================
 
 @router.get("/users")
