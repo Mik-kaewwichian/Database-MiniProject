@@ -21,6 +21,10 @@ const Checkout = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (paymentMethod === 'transfer' && !slipFile) {
+      toast.error('กรุณาแนบสลิปการโอนเงิน');
+      return;
+    }
     setLoading(true);
 
     console.log('=== DEBUG CHECKOUT ===');
@@ -28,13 +32,13 @@ const Checkout = () => {
     console.log('Payment Method:', paymentMethod);
 
     try {
-      const mockSlipUrl = slipFile 
-        ? `https://example.com/slips/${Date.now()}.jpg` 
-        : 'https://example.com/slips/default.jpg';
+      const slipResponse = paymentMethod === 'transfer'
+        ? await ordersAPI.uploadPaymentSlip(slipFile)
+        : null;
 
       const payload = {
         payment_method: paymentMethod === 'transfer' ? 'โอนเงิน' : 'บัตรเครดิต',
-        slip_url: mockSlipUrl,
+        slip_url: slipResponse?.data?.data?.slip_url,
       };
 
       console.log('Sending payload:', payload);
@@ -139,7 +143,7 @@ const Checkout = () => {
           </div>
         </div>
 
-        {/* Slip Upload (Mock) */}
+        {/* Slip Upload */}
         {paymentMethod === 'transfer' && (
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">อัปโหลดสลิปการโอนเงิน</h2>
@@ -148,8 +152,18 @@ const Checkout = () => {
               <p className="text-sm text-gray-600">คลิกเพื่ออัปโหลด หรือลากไฟล์มาวาง</p>
               <input
                 type="file"
-                accept="image/*"
-                onChange={(e) => setSlipFile(e.target.files[0])}
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                    toast.error('เลือกไฟล์ PNG, JPEG หรือ WebP ขนาดไม่เกิน 5 MB');
+                    e.target.value = '';
+                    setSlipFile(null);
+                    return;
+                  }
+                  setSlipFile(file);
+                }}
                 className="hidden"
                 id="slip-upload"
               />

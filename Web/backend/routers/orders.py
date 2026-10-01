@@ -1,12 +1,63 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import RedirectResponse
+from config import settings
 from database import get_db
 from models.order import OrderCreate
 from utils.auth import get_current_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
+PAYMENT_SLIP_BUCKET = "payment-slips"
+MAX_PAYMENT_SLIP_SIZE = 5 * 1024 * 1024
+PAYMENT_SLIP_TYPES = {
+    b"\x89PNG\r\n\x1a\n": ("image/png", "png"),
+    b"\xff\xd8\xff": ("image/jpeg", "jpg"),
+    b"RIFF": ("image/webp", "webp"),
+}
+
+
+@router.post("/payment-slip")
+async def upload_payment_slip(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+):
+    content = await file.read(MAX_PAYMENT_SLIP_SIZE + 1)
+    if len(content) > MAX_PAYMENT_SLIP_SIZE:
+        raise HTTPException(status_code=413, detail="สลิปต้องมีขนาดไม่เกิน 5 MB")
+
+    image_type = next(
+        (details for signature, details in PAYMENT_SLIP_TYPES.items() if content.startswith(signature)),
+        None,
+    )
+    if image_type is None or (image_type[0] == "image/webp" and content[8:12] != b"WEBP"):
+        raise HTTPException(status_code=400, detail="รองรับเฉพาะไฟล์ PNG, JPEG หรือ WebP")
+    if not settings.SUPABASE_SERVICE_KEY:
+        raise HTTPException(status_code=503, detail="ยังไม่ได้ตั้งค่า SUPABASE_SERVICE_KEY")
+
+    from supabase import create_client
+
+    storage = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY).storage
+    buckets = storage.list_buckets()
+    if not any(getattr(bucket, "name", None) == PAYMENT_SLIP_BUCKET for bucket in buckets):
+        storage.create_bucket(
+            PAYMENT_SLIP_BUCKET,
+            options={
+                "public": False,
+                "file_size_limit": MAX_PAYMENT_SLIP_SIZE,
+                "allowed_mime_types": ["image/png", "image/jpeg", "image/webp"],
+            },
+        )
+
+    content_type, extension = image_type
+    slip_path = f"{current_user['id']}/{secrets.token_hex(16)}.{extension}"
+    storage.from_(PAYMENT_SLIP_BUCKET).upload(
+        slip_path,
+        content,
+        file_options={"content-type": content_type, "upsert": "false"},
+    )
+    return success_response({"slip_url": slip_path}, "อัปโหลดสลิปสำเร็จ")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -15,6 +66,12 @@ async def create_order(
     current_user=Depends(get_current_user)
 ):
     """Create new order from cart"""
+    if order_data.payment_method == "โอนเงิน":
+        if not order_data.slip_url:
+            raise HTTPException(status_code=400, detail="กรุณาแนบสลิปการโอนเงิน")
+        if not order_data.slip_url.startswith(f"{current_user['id']}/"):
+            raise HTTPException(status_code=403, detail="ไม่พบสลิปที่อัปโหลดสำหรับบัญชีนี้")
+
     db = get_db()
     
     print(f"=== DEBUG CREATE ORDER ===")
@@ -70,6 +127,14 @@ async def create_order(
     
     order_id = order.data[0]["id"]
     print(f"✅ Created Order ID: {order_id}")
+
+    db.table("payments").insert({
+        "order_id": order_id,
+        "amount": total,
+        "payment_method": order_data.payment_method,
+        "slip_url": order_data.slip_url,
+        "status": "pending",
+    }).execute()
     
     # 5. Create order items
     for item_data in order_items_data:

@@ -48,6 +48,13 @@ export const cartAPI = {
 // Orders API
 export const ordersAPI = {
   create: (data) => api.post('/api/orders', data),
+  uploadPaymentSlip: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/api/orders/payment-slip', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   getAll: () => api.get('/api/orders'),
   getById: (id) => api.get(`/api/orders/${id}`),
   cancel: (id) => api.post(`/api/orders/${id}/cancel`),

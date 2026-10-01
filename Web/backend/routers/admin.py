@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from config import settings
 from database import get_db
@@ -10,6 +11,7 @@ from decimal import Decimal
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
+PAYMENT_SLIP_BUCKET = "payment-slips"
 
 
 # ==================== E-BOOK MANAGEMENT ====================
@@ -167,6 +169,53 @@ async def get_all_orders(admin=Depends(get_current_admin)):
         ),
         payments (id, status, slip_url, paid_at)
     """).order("created_at", desc=True).execute()
+
+    slip_storage = None
+    if settings.SUPABASE_SERVICE_KEY:
+        try:
+            from supabase import create_client
+
+            slip_storage = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_SERVICE_KEY,
+            ).storage.from_(PAYMENT_SLIP_BUCKET)
+        except Exception:
+            logger.exception("Could not initialize private payment slip storage")
+
+    for order in orders.data:
+        payments = order.get("payments") or []
+        payment = payments[0] if isinstance(payments, list) and payments else payments
+        slip_url = order.get("payment_slip_url") or (payment or {}).get("slip_url")
+        if not slip_url:
+            order["payment_slip_url"] = None
+            continue
+
+        if slip_url.startswith(("http://", "https://")):
+            if urlparse(slip_url).hostname in {"example.com", "www.example.com"}:
+                order["payment_slip_url"] = None
+            else:
+                order["payment_slip_url"] = slip_url
+            continue
+
+        order["payment_slip_url"] = None
+        if slip_storage:
+            try:
+                signed_slip = slip_storage.create_signed_url(slip_url, 1800)
+                if isinstance(signed_slip, dict):
+                    signed_url = signed_slip.get("signedURL") or signed_slip.get("signedUrl")
+                else:
+                    signed_url = getattr(signed_slip, "signedURL", None) or getattr(signed_slip, "signedUrl", None)
+
+                if signed_url and signed_url.startswith("/"):
+                    base_url = settings.SUPABASE_URL.rstrip("/")
+                    if not signed_url.startswith("/storage/v1/"):
+                        signed_url = f"{base_url}/storage/v1{signed_url}"
+                    else:
+                        signed_url = f"{base_url}{signed_url}"
+                order["payment_slip_url"] = signed_url
+            except Exception:
+                logger.exception("Could not create signed URL for order %s payment slip", order.get("id"))
+
     return success_response(orders.data)
 
 

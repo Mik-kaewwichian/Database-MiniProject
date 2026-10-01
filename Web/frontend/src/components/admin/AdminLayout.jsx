@@ -1,15 +1,41 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 import {
   LayoutDashboard, BookOpen, ShoppingCart, Users, BarChart3, LogOut, Menu, X, Feather
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const AdminLayout = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
+
+  useEffect(() => {
+    const refreshPendingReviewCount = async () => {
+      try {
+        const response = await api.get('/api/admin/orders');
+        const orders = response.data.data || [];
+        const pendingOrders = orders.filter((order) => {
+          if (!['pending', 'paid'].includes(order.status)) return false;
+          const payments = Array.isArray(order.payments)
+            ? order.payments
+            : [order.payments].filter(Boolean);
+          return payments.length === 0 || payments.some((payment) => payment.status === 'pending');
+        });
+
+        setPendingReviewCount(pendingOrders.length);
+      } catch {
+        setPendingReviewCount(0);
+      }
+    };
+
+    window.addEventListener('admin-orders-updated', refreshPendingReviewCount);
+    void refreshPendingReviewCount();
+    return () => window.removeEventListener('admin-orders-updated', refreshPendingReviewCount);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -21,7 +47,7 @@ const AdminLayout = ({ children }) => {
     { path: '/admin/ebooks', icon: BookOpen, label: 'จัดการหนังสือ' },
     { path: '/admin/categories', icon: BookOpen, label: 'จัดการหมวดหมู่' }, // จะสร้างในขั้นตอนถัดไป
     { path: '/admin/authors', icon: Feather, label: 'จัดการผู้แต่ง' },
-    { path: '/admin/orders', icon: ShoppingCart, label: 'จัดการคำสั่งซื้อ' },
+    { path: '/admin/orders', icon: ShoppingCart, label: 'จัดการคำสั่งซื้อ', badgeCount: pendingReviewCount },
     { path: '/admin/users', icon: Users, label: 'จัดการผู้ใช้' },
     { path: '/admin/reports', icon: BarChart3, label: 'รายงาน' },
   ];
@@ -59,6 +85,12 @@ const AdminLayout = ({ children }) => {
             >
               <item.icon className="h-5 w-5" />
               <span>{item.label}</span>
+              {item.badgeCount > 0 && (
+                <>
+                  <span className="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                  <span className="sr-only">มีออเดอร์ที่ยังไม่ได้ตรวจสอบ {item.badgeCount} รายการ</span>
+                </>
+              )}
             </Link>
           ))}
         </nav>
@@ -108,6 +140,12 @@ const AdminLayout = ({ children }) => {
                 >
                   <item.icon className="h-5 w-5" />
                   <span>{item.label}</span>
+                  {item.badgeCount > 0 && (
+                    <>
+                      <span className="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                      <span className="sr-only">มีออเดอร์ที่ยังไม่ได้ตรวจสอบ {item.badgeCount} รายการ</span>
+                    </>
+                  )}
                 </Link>
               ))}
             </nav>

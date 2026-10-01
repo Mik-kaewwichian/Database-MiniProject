@@ -156,7 +156,8 @@ BEGIN
   FROM order_items oi
   JOIN ebooks e ON oi.ebook_id = e.id
   JOIN orders o ON oi.order_id = o.id
-  WHERE o.status = 'confirmed'
+    JOIN payments p ON p.order_id = o.id
+    WHERE o.status = 'confirmed' AND p.status = 'verified'
   GROUP BY e.id, e.title
   ORDER BY total_sold DESC;
 END; $$;
@@ -173,7 +174,8 @@ BEGIN
   SELECT u.id, u.name::text, COUNT(o.id)::bigint, SUM(o.total_amount)::numeric
   FROM users u
   JOIN orders o ON u.id = o.user_id
-  WHERE o.status = 'confirmed'
+    JOIN payments p ON p.order_id = o.id
+    WHERE o.status = 'confirmed' AND p.status = 'verified'
   GROUP BY u.id, u.name
   ORDER BY total_spent DESC;
 END; $$;
@@ -192,7 +194,8 @@ BEGIN
   JOIN ebooks e ON oi.ebook_id = e.id
   JOIN categories c ON e.category_id = c.id
   JOIN orders o ON oi.order_id = o.id
-  WHERE o.status = 'confirmed'
+    JOIN payments p ON p.order_id = o.id
+    WHERE o.status = 'confirmed' AND p.status = 'verified'
   GROUP BY c.name
   ORDER BY total_sales DESC;
 END; $$;
@@ -205,11 +208,12 @@ CREATE OR REPLACE FUNCTION "public"."report_sales_by_time"() RETURNS TABLE("mont
     LANGUAGE "plpgsql"
     AS $$
 BEGIN
-  RETURN QUERY
-  SELECT TO_CHAR(created_at, 'YYYY-MM')::text, SUM(total_amount)::numeric, COUNT(id)::bigint
-  FROM orders
-  WHERE status = 'confirmed'
-  GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+    RETURN QUERY
+    SELECT TO_CHAR(o.created_at, 'YYYY-MM')::text, SUM(o.total_amount)::numeric, COUNT(o.id)::bigint
+    FROM orders o
+    JOIN payments p ON p.order_id = o.id
+    WHERE o.status = 'confirmed' AND p.status = 'verified'
+    GROUP BY TO_CHAR(o.created_at, 'YYYY-MM')
   ORDER BY month DESC;
 END; $$;
 
@@ -596,8 +600,9 @@ CREATE OR REPLACE VIEW "public"."report_best_selling_ebooks" AS
      JOIN "public"."ebooks" "e" ON (("oi"."ebook_id" = "e"."id")))
      JOIN "public"."authors" "a" ON (("e"."author_id" = "a"."id")))
      JOIN "public"."categories" "c" ON (("e"."category_id" = "c"."id")))
-     JOIN "public"."orders" "o" ON (("oi"."order_id" = "o"."id")))
-  WHERE (("o"."status")::"text" = ANY ((ARRAY['paid'::character varying, 'confirmed'::character varying])::"text"[]))
+        JOIN "public"."orders" "o" ON (("oi"."order_id" = "o"."id"))
+        JOIN "public"."payments" "p" ON (("p"."order_id" = "o"."id")))
+  WHERE (("o"."status")::"text" = 'confirmed'::"text") AND (("p"."status")::"text" = 'verified'::"text")
   GROUP BY "e"."id", "e"."title", "a"."name", "c"."name"
   ORDER BY ("sum"("oi"."quantity")) DESC
  LIMIT 10;
@@ -643,8 +648,9 @@ CREATE OR REPLACE VIEW "public"."report_customer_analysis" AS
     "sum"("o"."total_amount") AS "total_spent",
     "avg"("o"."total_amount") AS "avg_order_value",
     "max"("o"."created_at") AS "last_order_date"
-   FROM ("public"."users" "u"
-     LEFT JOIN "public"."orders" "o" ON ((("u"."id" = "o"."user_id") AND (("o"."status")::"text" = ANY ((ARRAY['paid'::character varying, 'confirmed'::character varying])::"text"[])))))
+     FROM ("public"."users" "u"
+         LEFT JOIN ("public"."orders" "o"
+             JOIN "public"."payments" "p" ON ((("p"."order_id" = "o"."id") AND (("o"."status")::"text" = 'confirmed'::"text") AND (("p"."status")::"text" = 'verified'::"text")))) ON (("u"."id" = "o"."user_id")))
   WHERE ("u"."role_id" = 1)
   GROUP BY "u"."id", "u"."name", "u"."email"
  HAVING ("count"(DISTINCT "o"."id") > 0)
@@ -670,12 +676,13 @@ CREATE OR REPLACE VIEW "public"."report_sales_by_category" AS
  SELECT "c"."id" AS "category_id",
     "c"."name" AS "category_name",
     "count"(DISTINCT "oi"."ebook_id") AS "unique_ebooks_sold",
-    "sum"("oi"."quantity") AS "total_items_sold",
-    "sum"("oi"."subtotal") AS "total_revenue"
-   FROM ((("public"."categories" "c"
-     LEFT JOIN "public"."ebooks" "e" ON (("c"."id" = "e"."category_id")))
-     LEFT JOIN "public"."order_items" "oi" ON (("e"."id" = "oi"."ebook_id")))
-     LEFT JOIN "public"."orders" "o" ON ((("oi"."order_id" = "o"."id") AND (("o"."status")::"text" = ANY ((ARRAY['paid'::character varying, 'confirmed'::character varying])::"text"[])))))
+    COALESCE("sum"("oi"."quantity"), 0::bigint) AS "total_items_sold",
+    COALESCE("sum"("oi"."subtotal"), 0::numeric) AS "total_revenue"
+     FROM (("public"."categories" "c"
+         LEFT JOIN "public"."ebooks" "e" ON (("c"."id" = "e"."category_id")))
+         LEFT JOIN ("public"."order_items" "oi"
+             JOIN "public"."orders" "o" ON (("oi"."order_id" = "o"."id"))
+             JOIN "public"."payments" "p" ON ((("p"."order_id" = "o"."id") AND (("o"."status")::"text" = 'confirmed'::"text") AND (("p"."status")::"text" = 'verified'::"text")))) ON (("e"."id" = "oi"."ebook_id")))
   GROUP BY "c"."id", "c"."name"
   ORDER BY ("sum"("oi"."subtotal")) DESC;
 
@@ -684,14 +691,14 @@ ALTER VIEW "public"."report_sales_by_category" OWNER TO "postgres";
 
 
 CREATE OR REPLACE VIEW "public"."report_sales_by_time" AS
- SELECT "date_trunc"('month'::"text", "created_at") AS "month",
-    "count"(DISTINCT "id") AS "total_orders",
-    "sum"("total_amount") AS "total_sales",
-    "avg"("total_amount") AS "avg_order_value"
-   FROM "public"."orders" "o"
-  WHERE (("status")::"text" = ANY ((ARRAY['paid'::character varying, 'confirmed'::character varying])::"text"[]))
-  GROUP BY ("date_trunc"('month'::"text", "created_at"))
-  ORDER BY ("date_trunc"('month'::"text", "created_at"));
+ SELECT "date_trunc"('month'::"text", "o"."created_at") AS "month",
+    "count"(DISTINCT "o"."id") AS "total_orders",
+    "sum"("o"."total_amount") AS "total_sales",
+    "avg"("o"."total_amount") AS "avg_order_value"
+     FROM ("public"."orders" "o"
+         JOIN "public"."payments" "p" ON ((("p"."order_id" = "o"."id") AND (("o"."status")::"text" = 'confirmed'::"text") AND (("p"."status")::"text" = 'verified'::"text"))))
+    GROUP BY ("date_trunc"('month'::"text", "o"."created_at"))
+    ORDER BY ("date_trunc"('month'::"text", "o"."created_at"));
 
 
 ALTER VIEW "public"."report_sales_by_time" OWNER TO "postgres";
